@@ -1,28 +1,120 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
 export default function HomePage() {
+  // États du formulaire synchronisés avec la page Contact
+  const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    serviceType: "transfert",
+    message: "",
+  });
+
+  const [phoneError, setPhoneError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [serverMessage, setServerMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Gestion du téléphone : uniquement des chiffres (max 10)
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const onlyDigits = e.target.value.replace(/\D/g, "").slice(0, 10);
+    setFormData((prev) => ({ ...prev, phone: onlyDigits }));
+    if (onlyDigits.length === 10) {
+      setPhoneError("");
+    }
+  };
+
+  // Validation format email
+  const validateEmail = (val: string) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(val);
+  };
+
+  const handleEmailBlur = () => {
+    if (formData.email && !validateEmail(formData.email)) {
+      setEmailError("Veuillez renseigner une adresse e-mail valide.");
+    } else {
+      setEmailError("");
+    }
+  };
+
+  // Soumission vers la route API backend (/api/contact)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setServerMessage(null);
+
+    if (!validateEmail(formData.email)) {
+      setEmailError("Veuillez renseigner une adresse e-mail valide.");
+      return;
+    }
+
+    const cleanPhone = formData.phone.replace(/[\s.\-_()]/g, "");
+    const phoneRegex = /^(?:(?:\+|00)33|0)[1-9][0-9]{8}$/;
+
+    if (!phoneRegex.test(cleanPhone)) {
+      setPhoneError("Veuillez renseigner un numéro de téléphone valide.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Une erreur est survenue.");
+      }
+
+      setServerMessage({
+        type: "success",
+        text: "Votre message a été transmis avec succès. Nous vous recontacterons très rapidement.",
+      });
+      setFormData({
+        name: "",
+        phone: "",
+        email: "",
+        serviceType: "transfert",
+        message: "",
+      });
+    } catch (err: unknown) {
+      setServerMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Erreur lors de l'envoi.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       
-      {/* 1. HERO BANNER COMPLET (Hero rempli + Image + Badges) */}
+      {/* 1. HERO BANNER */}
       <section className="relative w-full min-h-[90vh] flex flex-col items-center justify-center text-center px-4 overflow-hidden">
         
-        {/* Image de fond (Mercedes / Volant) */}
         <Image
-          src="/images/accueil-bg.jpg" // Place ton image dans public/images/
+          src="/images/accueil-bg.jpg" // Place ton image dans public/images/accueil-bg.jpg
           alt="Chauffeur privé VTC Emir Transport Orléans"
           fill
           priority
           className="object-cover object-center -z-20 brightness-[0.70]"
         />
         
-        {/* Voile sombre pour un contraste parfait */}
         <div className="absolute inset-0 bg-gradient-to-b from-noir/70 via-noir/50 to-noir/80 -z-10" />
 
-        {/* Contenu Hero */}
         <div className="relative z-10 max-w-4xl mx-auto space-y-6">
-          
           <span className="inline-block text-xs md:text-sm font-semibold tracking-[0.25em] uppercase text-sable bg-noir/40 backdrop-blur-sm px-4 py-1.5 rounded-full border border-sable/30">
             Service VTC d&apos;Excellence
           </span>
@@ -52,7 +144,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 2. SECTION VTC ORLÉANAIS (Fond Gris #585858 + Prestations précises) */}
+      {/* 2. SECTION VTC ORLÉANAIS (Fond Gris #585858) */}
       <section className="bg-gris py-20 px-4 sm:px-6 text-blanc">
         <div className="max-w-6xl mx-auto">
           
@@ -65,7 +157,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Les 3 Boxs de service avec prestations précises */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             
             {/* Box 1 : Capacité & Bagages */}
@@ -159,8 +250,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 3. SECTION CONTACT (Fond Bordeaux #620D14 + Carte Sable #ECE0D1) */}
-      <section className="bg-rouge-fonce py-20 px-4 sm:px-6">
+      {/* 3. SECTION CONTACT  */}
+      <section id="contact" className="bg-rouge-fonce py-20 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           
           <div className="text-center mb-10 space-y-2">
@@ -172,42 +263,97 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Formulaire dans le conteneur Sable de ta maquette */}
+          {/* Formulaire */}
           <div className="bg-sable rounded-2xl p-6 sm:p-10 shadow-2xl text-noir">
-            <form className="space-y-4">
+            
+            {/* Notification retour serveur */}
+            {serverMessage && (
+              <div
+                className={`mb-6 p-4 rounded-lg text-sm font-medium ${
+                  serverMessage.type === "success"
+                    ? "bg-green-100 text-green-900 border border-green-300"
+                    : "bg-red-100 text-red-900 border border-red-300"
+                }`}
+              >
+                {serverMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase mb-1 text-noir/80">Nom & Prénom</label>
                   <input
                     type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Votre nom complet"
                     className="w-full bg-[#dfd4c5] border border-noir/20 rounded-md p-3 text-sm text-noir placeholder:text-noir/40 focus:outline-none focus:ring-1 focus:ring-noir"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase mb-1 text-noir/80">Email</label>
+                  <label className="block text-xs font-bold uppercase mb-1 text-noir/80">Téléphone</label>
                   <input
-                    type="email"
-                    placeholder="votre.email@exemple.com"
+                    type="tel"
+                    inputMode="numeric"
+                    required
+                    value={formData.phone}
+                    onChange={handlePhoneChange}
+                    maxLength={10}
+                    placeholder="0612345678"
                     className="w-full bg-[#dfd4c5] border border-noir/20 rounded-md p-3 text-sm text-noir placeholder:text-noir/40 focus:outline-none focus:ring-1 focus:ring-noir"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase mb-1 text-noir/80">Objet</label>
-                <input
-                  type="text"
-                  placeholder="Ex : Réservation mariage, mise à disposition..."
-                  className="w-full bg-[#dfd4c5] border border-noir/20 rounded-md p-3 text-sm text-noir placeholder:text-noir/40 focus:outline-none focus:ring-1 focus:ring-noir"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase mb-1 text-noir/80">Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (emailError) setEmailError("");
+                    }}
+                    onBlur={handleEmailBlur}
+                    placeholder="votre.email@exemple.com"
+                    className={`w-full bg-[#dfd4c5] border rounded-md p-3 text-sm text-noir placeholder:text-noir/40 focus:outline-none focus:ring-1 ${
+                      emailError ? "border-red-600 focus:ring-red-600" : "border-noir/20 focus:ring-noir"
+                    }`}
+                  />
+                  {emailError && (
+                    <p className="text-red-700 text-xs mt-1 font-semibold">{emailError}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase mb-1 text-noir/80">Type de prestation</label>
+                  <select
+                    value={formData.serviceType}
+                    onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
+                    className="w-full bg-[#dfd4c5] border border-noir/20 rounded-md p-3 text-sm text-noir focus:outline-none focus:ring-1 focus:ring-noir"
+                  >
+                    <option value="transfert">Transfert Gare / Aéroport</option>
+                    <option value="pro">Trajet Professionnel / Affaires</option>
+                    <option value="evenement">Mariage / Événement privé</option>
+                    <option value="longue_distance">Trajet Longue Distance</option>
+                    <option value="autre">Autre demande</option>
+                  </select>
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase mb-1 text-noir/80">Message</label>
                 <textarea
                   rows={5}
+                  required
+                  value={formData.message}
+                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   placeholder="Détaillez votre demande..."
                   className="w-full bg-[#dfd4c5] border border-noir/20 rounded-md p-3 text-sm text-noir placeholder:text-noir/40 focus:outline-none focus:ring-1 focus:ring-noir resize-none"
                 />
@@ -215,10 +361,13 @@ export default function HomePage() {
 
               <div className="flex justify-end pt-3">
                 <button
-                  type="button"
-                  className="bg-rouge-fonce hover:bg-rouge-clair text-blanc font-serif uppercase tracking-wider px-8 py-3 rounded-full text-xs md:text-sm font-semibold transition-all shadow-md active:scale-95 cursor-pointer"
+                  type="submit"
+                  disabled={isLoading}
+                  className={`bg-rouge-fonce hover:bg-rouge-clair text-blanc font-serif uppercase tracking-wider px-8 py-3 rounded-full text-xs md:text-sm font-semibold transition-all shadow-md active:scale-95 cursor-pointer border border-rouge-clair/40 ${
+                    isLoading ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
                 >
-                  Envoyer le message
+                  {isLoading ? "Envoi en cours..." : "Envoyer le message"}
                 </button>
               </div>
 

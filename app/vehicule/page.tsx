@@ -139,11 +139,11 @@ export default function VehiculePage() {
           <div className="pt-8 flex flex-wrap items-center justify-center gap-8 sm:gap-20 text-blanc font-bold uppercase tracking-widest text-sm sm:text-base border-t border-blanc/20">
             <div className="flex items-center gap-3 bg-noir/20 px-6 py-3 rounded-full border border-blanc/10">
               <span className="text-2xl">👥</span>
-              <span>1 à 3 Passagers</span>
+              <span>1 à 4 Passagers</span>
             </div>
             <div className="flex items-center gap-3 bg-noir/20 px-6 py-3 rounded-full border border-blanc/10">
               <span className="text-2xl">🧳</span>
-              <span>1 à 3 Bagages</span>
+              <span>1 à 4 Bagages</span>
             </div>
           </div>
 
