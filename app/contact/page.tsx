@@ -203,11 +203,6 @@ export default function ContactPage() {
                 <span className="block text-xs font-bold uppercase text-noir mb-0.5">Disponibilité</span>
                 <p>7 jours sur 7 / 24 heures sur 24 (sur réservation)</p>
               </div>
-
-              <div>
-                <span className="block text-xs font-bold uppercase text-noir mb-0.5">Email direct</span>
-                <p className="text-rouge-fonce font-bold">contact@emirtransport.fr</p>
-              </div>
             </div>
 
             <div className="pt-4 border-t border-noir/15">
