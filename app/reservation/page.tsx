@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useForm, Controller } from "react-hook-form";
 import AddressAutocomplete, { AddressSelection } from "../components/AddressAutocomplete";
-import { getRouteInfo, RouteInfo } from "../lib/mapbox";
+import MapView from "../components/MapView";
+import { getRouteInfo, reverseGeocode, RouteInfo } from "../lib/mapbox";
+import { calculatePrice } from "../lib/pricing";
 
 type ReservationFormData = {
   departureAddress: string;
@@ -25,13 +27,14 @@ export default function ReservationPage() {
   const [submitStatus, setSubmitStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [serverMessage, setServerMessage] = useState<string | null>(null);
 
-  // Coordonnées GPS des deux adresses sélectionnées (null tant que non choisies dans la liste)
   const [departureCoords, setDepartureCoords] = useState<AddressSelection | null>(null);
   const [arrivalCoords, setArrivalCoords] = useState<AddressSelection | null>(null);
 
-  // Résultat du calcul d'itinéraire
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+
+  const [pinMode, setPinMode] = useState<"departure" | "arrival" | null>(null);
+  const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
 
   const {
     register,
@@ -61,10 +64,11 @@ export default function ReservationPage() {
   const departureAddress = watch("departureAddress");
   const arrivalAddress = watch("arrivalAddress");
 
-  const prixParKm = 2.5; // exemple
-  const prixEstime = routeInfo ? routeInfo.distanceKm * prixParKm : null;
+  // Prix affiché à l'utilisateur — calculé avec la MÊME formule que celle utilisée
+  // côté serveur juste avant le paiement (fichier lib/pricing.ts), pour garantir
+  // que le prix annoncé et le prix facturé sont toujours identiques.
+  const prixEstime = routeInfo ? calculatePrice(routeInfo.distanceKm, tripType) : null;
 
-  // Dès que les DEUX adresses ont des coordonnées valides, on calcule l'itinéraire
   useEffect(() => {
     if (!departureCoords || !arrivalCoords) {
       setRouteInfo(null);
@@ -89,8 +93,6 @@ export default function ReservationPage() {
     };
   }, [departureCoords, arrivalCoords]);
 
-  // Si l'utilisateur modifie le texte après avoir sélectionné une adresse,
-  // on invalide les coordonnées pour forcer une nouvelle sélection propre
   const handleDepartureTextChange = (text: string) => {
     setValue("departureAddress", text);
     setDepartureCoords(null);
@@ -101,19 +103,45 @@ export default function ReservationPage() {
     setArrivalCoords(null);
   };
 
+  const handleMapClick = async (coords: { longitude: number; latitude: number }) => {
+    if (!pinMode) return;
+
+    setIsReverseGeocoding(true);
+    const address = await reverseGeocode(coords.longitude, coords.latitude);
+    setIsReverseGeocoding(false);
+
+    const placeName = address ?? `Position (${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)})`;
+
+    if (pinMode === "departure") {
+      setValue("departureAddress", placeName, { shouldValidate: true });
+      setDepartureCoords({ placeName, ...coords });
+    } else {
+      setValue("arrivalAddress", placeName, { shouldValidate: true });
+      setArrivalCoords({ placeName, ...coords });
+    }
+
+    setPinMode(null);
+  };
+
   const onSubmit = async (data: ReservationFormData) => {
+    if (!routeInfo) {
+      setSubmitStatus("error");
+      setServerMessage("Merci de sélectionner une adresse de départ et d'arrivée valides avant de continuer.");
+      return;
+    }
+
     setSubmitStatus("loading");
     setServerMessage(null);
 
     try {
-      const response = await fetch("/api/reservation", {
+      const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
           tripType,
-          distanceKm: routeInfo?.distanceKm ?? null,
-          durationMinutes: routeInfo?.durationMinutes ?? null,
+          distanceKm: routeInfo.distanceKm,
+          durationMinutes: routeInfo.durationMinutes,
         }),
       });
 
@@ -123,12 +151,8 @@ export default function ReservationPage() {
         throw new Error(result.error || "Une erreur est survenue.");
       }
 
-      setSubmitStatus("success");
-      setServerMessage("Votre demande de réservation a bien été envoyée ! Vous allez recevoir une confirmation par e-mail et SMS.");
-      reset();
-      setDepartureCoords(null);
-      setArrivalCoords(null);
-      setRouteInfo(null);
+      // Redirection vers la page de paiement Stripe
+      window.location.href = result.url;
     } catch (error) {
       setSubmitStatus("error");
       setServerMessage(error instanceof Error ? error.message : "Une erreur est survenue.");
@@ -197,7 +221,7 @@ export default function ReservationPage() {
               </button>
             </div>
 
-            {/* ÉTAPE 1 : ADRESSES (avec autocomplétion Mapbox) */}
+            {/* ÉTAPE 1 : ADRESSES */}
             <div className="space-y-4">
               <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-wide text-rouge-fonce flex items-center gap-2 border-b border-noir/15 pb-2">
                 <span>📍</span> 1. Itinéraire
@@ -215,7 +239,6 @@ export default function ReservationPage() {
                   }}
                   error={errors.departureAddress?.message}
                 />
-                {/* Champ caché pour que react-hook-form valide bien le champ requis */}
                 <input type="hidden" {...register("departureAddress", { required: "L'adresse de départ est obligatoire." })} />
 
                 <AddressAutocomplete
@@ -231,6 +254,47 @@ export default function ReservationPage() {
                 />
                 <input type="hidden" {...register("arrivalAddress", { required: "L'adresse d'arrivée est obligatoire." })} />
               </div>
+
+              <div className="space-y-2 pt-1">
+                <p className="text-[11px] uppercase tracking-wide font-bold text-noir/60">
+                  Ou pointez directement sur la carte :
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPinMode(pinMode === "departure" ? null : "departure")}
+                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border transition-all ${
+                      pinMode === "departure"
+                        ? "bg-rouge-fonce text-blanc border-rouge-fonce shadow-md"
+                        : "bg-[#dfd4c5] text-noir/70 border-noir/15 hover:text-noir"
+                    }`}
+                  >
+                    {pinMode === "departure" ? "Cliquez sur la carte..." : "Je pointe le départ"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPinMode(pinMode === "arrival" ? null : "arrival")}
+                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border transition-all ${
+                      pinMode === "arrival"
+                        ? "bg-rouge-fonce text-blanc border-rouge-fonce shadow-md"
+                        : "bg-[#dfd4c5] text-noir/70 border-noir/15 hover:text-noir"
+                    }`}
+                  >
+                    {pinMode === "arrival" ? "Cliquez sur la carte..." : "Je pointe l'arrivée"}
+                  </button>
+                </div>
+                {isReverseGeocoding && (
+                  <p className="text-[11px] text-noir/60 italic">Récupération de l&apos;adresse...</p>
+                )}
+              </div>
+
+              <MapView
+                departure={departureCoords}
+                arrival={arrivalCoords}
+                routeGeometry={routeInfo?.geometry ?? null}
+                pinMode={pinMode}
+                onMapClick={handleMapClick}
+              />
             </div>
 
             {/* ÉTAPE 2 : DATE & HEURE */}
@@ -407,10 +471,10 @@ export default function ReservationPage() {
             </div>
 
             <div className="bg-rouge-fonce/80 border border-rouge-clair/40 rounded-xl p-5 text-center space-y-1">
-              <span className="text-m uppercase tracking-widest text-sable font-semibold">Tarif : </span>
-              <span className="text-s uppercase tracking-widest text-sable font-bold">
-                  {isCalculatingRoute ? "..." : routeInfo ? ` ${prixEstime?.toFixed(2)} €` : "-- €"}
-                </span>
+              <span className="text-xs uppercase tracking-widest text-sable font-semibold">Tarif Garanti</span>
+              <div className="text-3xl sm:text-4xl font-serif font-bold text-blanc">
+                {isCalculatingRoute ? "..." : prixEstime !== null ? `${prixEstime.toFixed(2)} €` : "-- €"}
+              </div>
               <p className="text-[11px] text-blanc/70">TTC • Sans frais cachés ni supplément bouchons</p>
             </div>
 
@@ -431,7 +495,7 @@ export default function ReservationPage() {
               disabled={submitStatus === "loading"}
               className="w-full bg-rouge-fonce hover:bg-rouge-clair text-blanc font-serif uppercase tracking-wider py-4 rounded-xl text-sm font-semibold transition-all shadow-xl border border-rouge-clair/40 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitStatus === "loading" ? "Envoi en cours..." : "Procéder au paiement sécurisé"}
+              {submitStatus === "loading" ? "Redirection vers le paiement..." : "Procéder au paiement sécurisé"}
             </button>
           </div>
         </form>
