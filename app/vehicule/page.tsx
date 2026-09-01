@@ -2,7 +2,6 @@ import Link from "next/link";
 import Image from "next/image";
 
 export default function VehiculePage() {
-  // Liste des 8 prestations à bord
   const services = [
     {
       title: "Bouteilles d'eau",
@@ -35,12 +34,7 @@ export default function VehiculePage() {
       icon: "🎵",
     },
     {
-      title: "Presse & Magazines",
-      desc: "Sélection d'actualités et magazines consultables à bord.",
-      icon: "📰",
-    },
-    {
-      title: "Siège enfant & bébé",
+      title: "Réhausseur pour enfants",
       desc: "Installé gratuitement et sur simple demande préalable.",
       icon: "👶",
     },
@@ -150,7 +144,7 @@ export default function VehiculePage() {
         </div>
       </section>
 
-      {/* 3. SECTION SERVICES À BORD (Fond Gris Anthracite #585858) */}
+      {/* 3. SECTION SERVICES À BORD */}
       <section className="bg-gris py-16 sm:py-24 px-4 sm:px-6 text-blanc">
         <div className="max-w-6xl mx-auto space-y-12 sm:space-y-16">
           
@@ -163,12 +157,12 @@ export default function VehiculePage() {
             </p>
           </div>
 
-          {/* Grille des 8 cartes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Grille flex centrée des 7 cartes */}
+          <div className="flex flex-wrap justify-center gap-6 max-w-6xl mx-auto">
             {services.map((item, idx) => (
               <div
                 key={idx}
-                className="bg-sable text-noir rounded-2xl p-6 text-center flex flex-col items-center justify-between shadow-xl hover:-translate-y-1 transition-all duration-200 border border-noir/5"
+                className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(25%-18px)] bg-sable text-noir rounded-2xl p-6 text-center flex flex-col items-center justify-between shadow-xl hover:-translate-y-1 transition-all duration-200 border border-noir/5"
               >
                 <div className="text-4xl mb-4 bg-[#dfd4c5] w-16 h-16 rounded-full flex items-center justify-center shadow-inner">
                   {item.icon}

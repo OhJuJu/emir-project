@@ -23,7 +23,7 @@ export default function ContactPage() {
   const faqs = [
     {
       q: "Comment fonctionne le calcul du tarif ?",
-      a: "Le tarif est calculé précisément au kilomètre lors de votre réservation en ligne. Le prix annoncé est fixe et garanti sans surprise.",
+      a: "Le tarif est calculé selon une grille tarifaire stricte lors de votre réservation en ligne. Le prix annoncé est fixe et garanti sans surprise.",
     },
     {
       q: "Que se passe-t-il en cas de retard de vol ou de train ?",
@@ -35,7 +35,7 @@ export default function ContactPage() {
     },
     {
       q: "Proposez-vous des sièges bébé / enfants ?",
-      a: "Oui, un siège enfant ou rehausseur homologué est mis à disposition gratuitement sur simple précision dans votre message ou réservation.",
+      a: "Oui, un rehausseur homologué est mis à disposition gratuitement sur simple précision dans votre message ou réservation.",
     },
   ];
 
